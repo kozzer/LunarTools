@@ -13,13 +13,13 @@
     	android:orientation="horizontal" >
     	
         <TextView
-   		    android:id="@+id/text_current_rom_label"
+   		android:id="@+id/text_current_rom_label"
 	        android:layout_width="100dp"
 	        android:layout_height="wrap_content"
 	        android:text="@string/current_rom_label" />
        
-   		<TextView
-   		    android:id="@+id/text_current_rom"
+   	<TextView
+   		android:id="@+id/text_current_rom"
 	        android:layout_width="wrap_content"
 	        android:layout_height="wrap_content"
 	        android:text="@string/current_rom" />
@@ -28,19 +28,19 @@
     
     <LinearLayout 
         android:id="@+id/layout_boot_info"
-   		android:layout_width="match_parent"
+   	android:layout_width="match_parent"
     	android:layout_height="wrap_content"
     	android:padding="5dp"
     	android:orientation="horizontal" >
     	
         <TextView
-   		    android:id="@+id/text_current_boot_label"
+   		android:id="@+id/text_current_boot_label"
 	        android:layout_width="100dp"
 	        android:layout_height="wrap_content"
 	        android:text="@string/current_boot_label" />
        
-   		<TextView
-   		    android:id="@+id/text_current_boot"
+   	<TextView
+   		android:id="@+id/text_current_boot"
 	        android:layout_width="wrap_content"
 	        android:layout_height="wrap_content"
 	        android:text="@string/current_boot" />
@@ -49,19 +49,19 @@
     
     <LinearLayout 
         android:id="@+id/layout_recovery_info"
-   		android:layout_width="match_parent"
+   	android:layout_width="match_parent"
     	android:layout_height="wrap_content"
     	android:padding="5dp"
     	android:orientation="horizontal" >
     	
         <TextView
-   		    android:id="@+id/text_current_recovery_label"
+   		android:id="@+id/text_current_recovery_label"
 	        android:layout_width="100dp"
 	        android:layout_height="wrap_content"
 	        android:text="@string/current_recovery_label" />
        
-   		<TextView
-   		    android:id="@+id/text_current_recovery"
+   	<TextView
+   		android:id="@+id/text_current_recovery"
 	        android:layout_width="wrap_content"
 	        android:layout_height="wrap_content"
 	        android:text="@string/current_recovery" />
@@ -70,19 +70,19 @@
 
     <LinearLayout 
         android:id="@+id/layout_sdcard_info"
-   		android:layout_width="match_parent"
+   	android:layout_width="match_parent"
     	android:layout_height="wrap_content"
     	android:padding="5dp"
     	android:orientation="horizontal" >
     	
         <TextView
-   		    android:id="@+id/text_current_sdcard_label"
+   		android:id="@+id/text_current_sdcard_label"
 	        android:layout_width="100dp"
 	        android:layout_height="wrap_content"
 	        android:text="@string/current_sdcard_label" />
        
-   		<TextView
-   		    android:id="@+id/text_current_sdcard"
+   	<TextView
+   		android:id="@+id/text_current_sdcard"
 	        android:layout_width="wrap_content"
 	        android:layout_height="wrap_content"
 	        android:text="@string/current_sdcard" />
@@ -91,7 +91,7 @@
     
     <LinearLayout 
         android:id="@+id/layout_menu"
-   		android:layout_width="match_parent"
+   	android:layout_width="match_parent"
     	android:layout_height="match_parent"
     	android:orientation="vertical"  >
    		
