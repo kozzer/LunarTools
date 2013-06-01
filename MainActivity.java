@@ -32,6 +32,9 @@ public class MainActivity extends Activity {
 			((TextView)findViewById(R.id.text_current_boot)).setText(_boot);
 			((TextView)findViewById(R.id.text_current_recovery)).setText(_recovery);
 			((TextView)findViewById(R.id.text_current_sdcard)).setText(_extsd);
+		} else {
+			//If false was returned, then there should be an error message in _currentrom
+			((TextView)findViewById(R.id.text_current_rom)).setText(_currentrom);
 		}
 	}
 
