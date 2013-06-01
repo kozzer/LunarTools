@@ -1,7 +1,7 @@
 LunarTools
 ==========
 
-GUI front-end for Snuzzo's LunarTools
+GUI front-end for Snuzzo's LunarTools (https://github.com/Snuzzo/LunarTools)
 
 Files:
 
