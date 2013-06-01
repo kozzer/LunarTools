@@ -92,14 +92,40 @@ public class MainActivity extends Activity {
 			Process process = rt.exec("su");
 			
 			//Get boot
-			process = rt.exec("grep -i \"boot\" /proc/emmc | sed 's/.*boot(.*)</recovery.*/\1/' | sed 's/:[^:]*$//'");
+			// mmcblk0p22: 01000000 00000200 "boot"
+			//process = rt.exec("grep -i \"boot\" /proc/emmc | sed 's/.*boot(.*)</recovery.*/\1/' | sed 's/:[^:]*$//'");
+			process = rt.exec("grep -i \"boot\" /proc/emmc");
 			BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
 			_boot = reader.readLine();
+			if (_boot != null && _boot.contains("mmcblk") == true){
+				//assume that we got what we need
+				String [] boot = _boot.split(" ");
+				if (boot != null && boot.length > 0){
+					for(int i=0;i<boot.length;i++){
+						if (boot[i].contains("mmcblk") == true){
+							 _boot = "/dev/block/" + boot[i].replace(":",  "");
+						}
+					}
+				}
+			}
 			
 			//Get recovery
-			process = rt.exec("grep -i \"recovery\" /proc/emmc | sed 's/.*boot(.*)</recovery.*/\1/' | sed 's/:[^:]*$//'");
+			// mmcblk0p23: 00fffc00 00000200 "recovery"
+			//process = rt.exec("grep -i \"recovery\" /proc/emmc | sed 's/.*boot(.*)</recovery.*/\1/' | sed 's/:[^:]*$//'");
+			process = rt.exec("grep -i \"recovery\" /proc/emmc");
 			reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
 			_recovery = reader.readLine();
+			if (_recovery != null && _recovery.contains("mmcblk") == true){
+				//assume that we got what we need
+				String [] recovery = _recovery.split(" ");
+				if (recovery != null && recovery.length > 0){
+					for(int i=0;i<recovery.length;i++){
+						if (recovery[i].contains("mmcblk") == true){
+							_recovery = "/dev/block/" + recovery[i].replace(":",  "");
+						}
+					}
+				}
+			}
 			
 			//Get external sd path from fstab
 			File fstab = new File(_fstabPath);
