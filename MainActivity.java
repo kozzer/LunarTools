@@ -43,34 +43,34 @@ public class MainActivity extends Activity {
 		//Set button click event handlers
 		//Button 1 - flash saved boot
 		((Button)(findViewById(R.id.button_flash_saved_boot))).setOnClickListener(new OnClickListener() {
-	        public void onClick(View v) {
-	            //call functional code method here
-	        }
-	    });
+		        public void onClick(View v) {
+		            //call functional code method here
+		        }
+	    	});
 		//Button 2 - backup / flash recovery
 		((Button)(findViewById(R.id.button_flash_recovery))).setOnClickListener(new OnClickListener() {
-	        public void onClick(View v) {
-	            //call functional code method here
-	        }
-	    });
+		        public void onClick(View v) {
+		            //call functional code method here
+		        }
+	    	});
 		//Button 3 - update kernel with AnyKernel zImage
 		((Button)(findViewById(R.id.button_update_kernel))).setOnClickListener(new OnClickListener() {
-	        public void onClick(View v) {
-	            //call functional code method here
-	        }
-	    });
+		        public void onClick(View v) {
+		            //call functional code method here
+		        }
+	    	});
 		//Button 4 - flash boot.img and reboot to recovery
 		((Button)(findViewById(R.id.button_flash_boot_from_zip))).setOnClickListener(new OnClickListener() {
-	        public void onClick(View v) {
-	            //call functional code method here
-	        }
-	    });
+		        public void onClick(View v) {
+		            //call functional code method here
+		        }
+	    	});
 		//Button 5 - exit LunarTools
 		((Button)(findViewById(R.id.button_exit_lunartools))).setOnClickListener(new OnClickListener() {
-	        public void onClick(View v) {
-	            //exit application
-	        	System.exit(0);
-	        }
+		        public void onClick(View v) {
+		            //exit application
+		        	System.exit(0);
+		        }
 	    });
 		
 	}
