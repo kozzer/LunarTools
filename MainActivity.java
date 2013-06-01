@@ -71,7 +71,7 @@ public class MainActivity extends Activity {
 		            //exit application
 		        	System.exit(0);
 		        }
-	    });
+	    	});
 		
 	}
 
