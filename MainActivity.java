@@ -4,9 +4,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 
 import android.os.Bundle;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.DialogInterface;
 import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -17,23 +22,33 @@ public class MainActivity extends Activity {
 
 	private final String _fstabPath = "/system/etc/vold.fstab";
 	private final String _buildpropPath = "/system/build.prop";
+	private final String _blockPath = "/dev/block/";
+	
+	private Context _context;
 	
 	private String _currentrom;
 	private String _boot;
 	private String _recovery;
 	private String _extsd;
 	private File _lunarDir;
+	
+	private List<File> _bootImgs;
+	private File _chosenBoot;
+	private boolean _setValuesViaCommandLine;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 		
+		//Save a reference to the app's main activity context for when we go down the rabbit hole of dialogs
+		_context = this;
+		
 		//Since the layout has been generated, now populate current rom text
 		if (getCurrentRomInfo() == true){
 			((TextView)findViewById(R.id.text_current_rom)).setText(_currentrom);
-			((TextView)findViewById(R.id.text_current_boot)).setText(_boot);
-			((TextView)findViewById(R.id.text_current_recovery)).setText(_recovery);
+			((TextView)findViewById(R.id.text_current_boot)).setText(_blockPath + _boot);
+			((TextView)findViewById(R.id.text_current_recovery)).setText(_blockPath + _recovery);
 			((TextView)findViewById(R.id.text_current_sdcard)).setText(_extsd);
 		} else {
 			//If false was returned, then there should be an error message in _currentrom
@@ -45,24 +60,28 @@ public class MainActivity extends Activity {
 		((Button)(findViewById(R.id.button_flash_saved_boot))).setOnClickListener(new OnClickListener() {
 		        public void onClick(View v) {
 		            //call functional code method here
+		        	menu1_FlashSavedBoot();
 		        }
 	    	});
 		//Button 2 - backup / flash recovery
 		((Button)(findViewById(R.id.button_flash_recovery))).setOnClickListener(new OnClickListener() {
 		        public void onClick(View v) {
 		            //call functional code method here
+		        	menu2_FlashRecovery();
 		        }
 	    	});
 		//Button 3 - update kernel with AnyKernel zImage
 		((Button)(findViewById(R.id.button_update_kernel))).setOnClickListener(new OnClickListener() {
 		        public void onClick(View v) {
 		            //call functional code method here
+		        	menu3_UpdateKernel();
 		        }
 	    	});
 		//Button 4 - flash boot.img and reboot to recovery
 		((Button)(findViewById(R.id.button_flash_boot_from_zip))).setOnClickListener(new OnClickListener() {
 		        public void onClick(View v) {
 		            //call functional code method here
+		        	menu4_FlashBootFromZipAutoReboot();
 		        }
 	    	});
 		//Button 5 - exit LunarTools
@@ -72,7 +91,6 @@ public class MainActivity extends Activity {
 		        	System.exit(0);
 		        }
 	    	});
-		
 	}
 
 	@Override
@@ -103,7 +121,7 @@ public class MainActivity extends Activity {
 				if (boot != null && boot.length > 0){
 					for(int i=0;i<boot.length;i++){
 						if (boot[i].contains("mmcblk") == true){
-							 _boot = "/dev/block/" + boot[i].replace(":",  "");
+							 _boot = boot[i].replace(":",  "");
 						}
 					}
 				}
@@ -121,7 +139,7 @@ public class MainActivity extends Activity {
 				if (recovery != null && recovery.length > 0){
 					for(int i=0;i<recovery.length;i++){
 						if (recovery[i].contains("mmcblk") == true){
-							_recovery = "/dev/block/" + recovery[i].replace(":",  "");
+							_recovery = recovery[i].replace(":",  "");
 						}
 					}
 				}
@@ -240,4 +258,153 @@ public class MainActivity extends Activity {
 		//We made it to the end without an exception, so return true (success)
 		return true;	
 	}
+
+	private void menu1_FlashSavedBoot(){
+		
+		try{
+			//Get the file listing Lunar's directory (/sdcard/lunar)
+			File[] bootFiles = _lunarDir.listFiles();
+			//Loop through the files
+			if (bootFiles != null && bootFiles.length > 0){
+				_bootImgs = new ArrayList<File>();
+				for(int i = 0; i < bootFiles.length; i++){
+					String fileName = bootFiles[i].getName();
+					//If file name is boot*.img or *.cfg, then pull it
+					if (fileName.length() > 4 && 
+							((fileName.substring(0, 4).equals("boot") == true && fileName.substring(fileName.length() - 4, fileName.length()).equals(".img") == true) ||
+							(fileName.substring(fileName.length() - 4, fileName.length()).equals(".cfg") == true))) {
+						//We found a file that ends in ".img"
+						_bootImgs.add(bootFiles[i]);
+					}
+				}
+			}
+			
+			//If we've got some .img files, ask user which one they want
+			if (_bootImgs != null && _bootImgs.size() > 0){
+				//Ask user which img to flash
+				menu1_ShowSavedBoots();
+			} else {
+				//Tell user no img files were found
+				showMessageWithNoActions("No saved boots to flash", "No saved boot.img files were found.  Please check your file's path & name.");
+			}
+						
+		} catch (Exception e) {
+			//display message
+		}
+	}
+	
+	private void menu1_ShowSavedBoots(){
+		//Move the list from a list of File objects to an array of String objects to be displayed to the user
+		String [] fileArray = new String [_bootImgs.size()];
+		for(int i=0; i<_bootImgs.size();i++){
+			fileArray[i] = _bootImgs.get(i).getName();
+		}
+		//Create the dialog box
+		AlertDialog.Builder builder = new AlertDialog.Builder(this)		
+		.setTitle("Select")
+		.setMessage("Choose boot.img to Flash:")
+		.setIcon(android.R.drawable.ic_menu_add)
+		.setItems(fileArray, new DialogInterface.OnClickListener(){
+			@Override
+			public void onClick(DialogInterface dialog, int which){
+				dialog.dismiss();
+				//save which boot.img was chosen
+				_chosenBoot = _bootImgs.get(which);
+				//Ask user how they want to set values
+				menu1_ShowSetValuesDialog(which);		
+			}
+		});
+		//Display the dialog to the user
+		AlertDialog alert = builder.create();
+		alert.show();
+	}
+	
+	private void menu1_ShowSetValuesDialog(int choice){
+		//Now that we have a chosen boot.img, ask the user if they want to set values via command line or Init.d
+		String [] setValues = {"Set values via Command Line", "Set values via Init.d"};
+		AlertDialog.Builder builder = new AlertDialog.Builder(_context)
+		.setTitle("How to set values?")
+		.setItems(setValues, new DialogInterface.OnClickListener(){
+			@Override
+			public void onClick(DialogInterface dialog, int which){
+				dialog.dismiss();
+				if (which == 0){
+					//Set via command line
+					_setValuesViaCommandLine = true;
+				} else {
+					//Set via Init.d
+					_setValuesViaCommandLine = false;
+				}
+				//Now that we know how they want to set the values, ask user if they want to flash or save for later
+				menu1_ShowFlashOrSaveDialog();
+			}
+		});
+		//Display the dialog to the user
+		AlertDialog alert = builder.create();
+		alert.show();
+	}
+	
+	private void menu1_ShowFlashOrSaveDialog(){
+		//Simply tells user a message, with no further action to be taken
+		new AlertDialog.Builder(this)
+	    .setTitle("Flash Now?")
+	    .setMessage("Flash [" + _chosenBoot.getName() + "] now, or save for later?")
+	    .setPositiveButton("Flash Now", new DialogInterface.OnClickListener() {
+	        public void onClick(DialogInterface dialog, int which) { 
+	            //User wants to flash now
+	        	menu1_FlashChosenBoot();
+	        }
+	     })
+	     .setNegativeButton("Save for Later", new DialogInterface.OnClickListener(){
+	    	public void onClick(DialogInterface dialog, int which){
+	    		//User wants to save for later
+	    		menu1_SaveBootChoices();
+	    	}
+	     })
+	     .show();		
+	}
+	
+	private void menu1_FlashChosenBoot(){
+		//We have all the info we need to flash, so try to flash!
+		try {
+			showMessageWithNoActions("FLASH!", "You have chosen to flash, but it ain't done yet");
+		} catch (Exception e){
+			//nada
+		}
+	}
+	
+	private void menu1_SaveBootChoices(){
+		//We have all the info we need, but user wants to save, so save to cfg file
+		try {
+			showMessageWithNoActions("SAVE!", "You have chosen to save, but it ain't done yet");			
+		} catch (Exception e){
+			//nada
+		}		
+	}
+	
+	private void menu2_FlashRecovery(){
+		
+	}
+	
+	private void menu3_UpdateKernel(){
+		
+	}
+	
+	private void menu4_FlashBootFromZipAutoReboot(){
+		
+	}
+	
+	private void showMessageWithNoActions(String dlgTitle, String dlgMessage){
+		//Simply tells user a message, with no further action to be taken
+		new AlertDialog.Builder(this)
+	    .setTitle(dlgTitle)
+	    .setMessage(dlgMessage)
+	    .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+	        public void onClick(DialogInterface dialog, int which) { 
+	            // nothing to do
+	        }
+	     })
+	     .show();
+	}
+
 }
