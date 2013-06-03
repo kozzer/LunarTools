@@ -12,11 +12,15 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.TextView;
 import android.widget.Button;
+import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
@@ -49,7 +53,7 @@ public class MainActivity extends Activity {
 			((TextView)findViewById(R.id.text_current_rom)).setText(_currentrom);
 			((TextView)findViewById(R.id.text_current_boot)).setText(_blockPath + _boot);
 			((TextView)findViewById(R.id.text_current_recovery)).setText(_blockPath + _recovery);
-			((TextView)findViewById(R.id.text_current_sdcard)).setText(_extsd);
+			((TextView)findViewById(R.id.text_current_sdcard)).setText(_lunarDir.getAbsolutePath());
 		} else {
 			//If false was returned, then there should be an error message in _currentrom
 			((TextView)findViewById(R.id.text_current_rom)).setText(_currentrom);			
@@ -285,7 +289,7 @@ public class MainActivity extends Activity {
 				menu1_ShowSavedBoots();
 			} else {
 				//Tell user no img files were found
-				showMessageWithNoActions("No saved boots to flash", "No saved boot.img files were found.  Please check your file's path & name.");
+				showMessageWithNoActions("No saved boots to flash", "No saved boot.img or cfg files were found.\n\nPlease make sure your file is in\n" + _lunarDir.getAbsolutePath());
 			}
 						
 		} catch (Exception e) {
@@ -302,7 +306,7 @@ public class MainActivity extends Activity {
 		//Create the dialog box
 		AlertDialog.Builder builder = new AlertDialog.Builder(this)		
 		.setTitle("Select")
-		.setMessage("Choose boot.img to Flash:")
+		.setMessage("Choose boot.img or previously saved cfg to Flash:")
 		.setIcon(android.R.drawable.ic_menu_add)
 		.setItems(fileArray, new DialogInterface.OnClickListener(){
 			@Override
@@ -367,9 +371,63 @@ public class MainActivity extends Activity {
 	private void menu1_FlashChosenBoot(){
 		//We have all the info we need to flash, so try to flash!
 		try {
-			showMessageWithNoActions("FLASH!", "You have chosen to flash, but it ain't done yet");
+			//Get runtime object
+			Runtime rt = Runtime.getRuntime();
+			
+			Toast.makeText(_context, "starting su session", Toast.LENGTH_SHORT).show();
+			
+			//Start su session
+			Process process = rt.exec("su");
+
+			if (_setValuesViaCommandLine == true){
+				//Set values via command line
+				if (_chosenBoot.getName().substring(_chosenBoot.getName().length() - 4, 4).equals(".cfg") == true){
+					
+					Toast.makeText(_context, "flashing from cfg file", Toast.LENGTH_SHORT).show();
+					
+					//config file
+					process = rt.exec("cd " + _lunarDir.getAbsolutePath());
+					process = rt.exec("dd if=" + _blockPath + _boot + " of=" + _lunarDir.getAbsolutePath() + "/tempboot.img 2>> lunardebug.log");
+					process = rt.exec("abootimg -x " + _lunarDir.getAbsolutePath() + "/tempboot.img >> lunardebug.log");
+					process = rt.exec("sed -i -e \"s/gov.*//g\" bootimg.cfg");
+					process = rt.exec("file_chosen=$(cat " + _boot + ")");
+					process = rt.exec("sed -i -e \"$ s/$/" + _boot + "/g\" bootimg.cfg");
+					process = rt.exec("cat bootimg.cfg >> lunardebug.log");
+					process = rt.exec("abootimg -u tempboot.img -f bootimg.cfg >> lunardebug.log");
+					process = rt.exec("dd if=" + _lunarDir.getAbsolutePath() + "/tempboot.img of=" + _blockPath + _boot + " 2>> lunardebug.log");
+					
+					Toast.makeText(_context, "removing old files", Toast.LENGTH_SHORT).show();
+					
+					process = rt.exec("rm bootimg.cfg");
+					process = rt.exec("rm initrd.img");
+					process = rt.exec("rm zImage");
+					process = rt.exec("rm tempboot.img");
+				} else if (_chosenBoot.getName().substring(_chosenBoot.getName().length() - 4, 4).equals(".img") == true){
+					
+					Toast.makeText(_context, "flashing boot.img", Toast.LENGTH_SHORT).show();
+					
+					//Actual boot.img file, move to the boot block
+					process = rt.exec("dd if=" + _chosenBoot.getName() + " of=" + _blockPath + _boot);			
+				}
+				//Delete dalvik data
+				Toast.makeText(_context, "clearing dalvik-cache", Toast.LENGTH_SHORT).show();
+				process = rt.exec("rm -r /data/dalvik-cache");
+				
+				//Check if this is a system app, if so then auto reboot phone, otherwise user has to do it manually
+				if (isLunarToolsRunningAsSystemApp() == true){
+					//Tell user they're rebooting to recovery
+					menu1_tellUserThenReboot();
+				} else {
+					//Tell user they need to reboot to recovery immediately
+					showMessageWithNoActions("Reboot to Recovery", "You must reboot to recovery IMMEDIATELY.\n\nPlease exit LunarTools and reboot to recovery NOW.");
+				}
+			} else {
+				//Set values via init.d
+				showMessageWithNoActions("Not implemented", "Sorry, using init.d ain't done yet.");
+			}
 		} catch (Exception e){
-			//nada
+			//Display message to user
+			showMessageWithNoActions("Error", "Error trying to flash chosen boot/config file:\n" + e.getMessage());
 		}
 	}
 	
@@ -382,18 +440,40 @@ public class MainActivity extends Activity {
 		}		
 	}
 	
+
+	private void menu1_tellUserThenReboot(){
+		//Simply tells user a message, with no further action to be taken
+		new AlertDialog.Builder(this)
+	    .setTitle("Reboot to Recovery")
+	    .setMessage("Your phone is about to reboot to recovery.\n\nTap 'OK' to Reboot.")
+	    .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+	        public void onClick(DialogInterface dialog, int which) { 
+	        	try{
+	        		//reboot the phone
+	        		//Runtime.getRuntime().exec(new String[]{"su","-c","reboot now"});
+	        		Runtime.getRuntime().exec(new String[]{"su","-c","busybox reboot recovery"});
+	        	} catch (Exception e){
+	        		//handle later...
+	        	}
+	        }
+	     })
+	     .show();
+	}
+	
 	private void menu2_FlashRecovery(){
-		
+		Toast.makeText(_context, "flashing recovery not implemented", Toast.LENGTH_LONG).show();
 	}
 	
+
 	private void menu3_UpdateKernel(){
-		
+		Toast.makeText(_context, "updating the kernel not implemented", Toast.LENGTH_LONG).show();
 	}
 	
+
 	private void menu4_FlashBootFromZipAutoReboot(){
-		
+		Toast.makeText(_context, "flashing boot from zip not implemented", Toast.LENGTH_LONG).show();
 	}
-	
+
 	private void showMessageWithNoActions(String dlgTitle, String dlgMessage){
 		//Simply tells user a message, with no further action to be taken
 		new AlertDialog.Builder(this)
@@ -406,5 +486,29 @@ public class MainActivity extends Activity {
 	     })
 	     .show();
 	}
+	
 
-}
+	private boolean isLunarToolsRunningAsSystemApp(){
+		//Boolean holding false, until we run into com.webkozzer.lunartools in system package list
+		boolean lunarIsSystemApp = false;
+		
+		//Get the system package list
+		PackageManager pm = _context.getPackageManager();
+		List<PackageInfo> list =pm.getInstalledPackages(0);
+
+		//Loop through the system package list
+		for(PackageInfo pi : list) {
+			 try {
+			 	ApplicationInfo ai = pm.getApplicationInfo(pi.packageName, 0);
+			 	if((ai.flags & ApplicationInfo.FLAG_SYSTEM)!=0){
+			 		if (ai.name.equals("com.webkozzer.lunartools") == true){
+			 			lunarIsSystemApp = true;
+			 		}
+			 	}
+			 } catch (Exception e){
+				 
+			 }
+		}
+		
+		return lunarIsSystemApp;
+	}
