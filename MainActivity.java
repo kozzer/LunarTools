@@ -6,7 +6,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.FilenameFilter;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -46,6 +49,9 @@ public class MainActivity extends Activity {
 	
 	private List<File> _recoveryImgs;
 	private File _chosenRecovery;
+	
+	private List<File> _zipFiles;
+	private File _chosenZip;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -288,8 +294,10 @@ public class MainActivity extends Activity {
 					}
 				}
 			}
+			
 			//Now look for cfg's in .sbin
-			File[] sbinFiles = (new File("/sbin")).listFiles();
+			File sbin = new File("/sbin");
+			File[] sbinFiles = sbin.listFiles();
 			//Loop through the files
 			if (sbinFiles != null && sbinFiles.length > 0){
 				Toast.makeText(_context, "Found " + Integer.toString(sbinFiles.length) + " files in /sbin...grabbing any .cfg's now", Toast.LENGTH_SHORT).show();
@@ -305,6 +313,13 @@ public class MainActivity extends Activity {
 						_bootImgs.add(bootFiles[i]);
 					}
 				}
+			} else {
+				if (sbinFiles == null){
+					Toast.makeText(_context, "Failed reading /sbin for files.  Listing is [null].", Toast.LENGTH_SHORT).show();
+				} else {
+					Toast.makeText(_context, "Found 0 files in /sbin", Toast.LENGTH_SHORT).show();				
+				}
+			
 			}
 			
 			//If we've got some .img files, ask user which one they want
@@ -313,7 +328,7 @@ public class MainActivity extends Activity {
 				menu1_ShowSavedBoots();
 			} else {
 				//Tell user no img files were found
-				showMessageWithNoActions("No saved boots to flash", "No saved boot.img or cfg files were found.\n\nPlease make sure your file is in\n" + _lunarDir.getAbsolutePath());
+				showMessageWithNoActions("No saved boots to flash", "No saved cfg files were found.\n\nPlease make sure your file is in\n" + _lunarDir.getAbsolutePath());
 			}
 						
 		} catch (Exception e) {
@@ -330,7 +345,7 @@ public class MainActivity extends Activity {
 		}
 		//Create the dialog box
 		AlertDialog.Builder builder = new AlertDialog.Builder(this)		
-		.setTitle("Select img or cfg to flash:")
+		.setTitle("Select cfg to flash:")
 		.setItems(fileArray, new DialogInterface.OnClickListener(){
 			@Override
 			public void onClick(DialogInterface dialog, int which){
@@ -407,13 +422,7 @@ public class MainActivity extends Activity {
 				Toast.makeText(_context, "flashing file", Toast.LENGTH_SHORT).show();
 				
 				//Call script ($1 = $file_chosen, $2 = $boot)
-				DataOutputStream stdin = new DataOutputStream(process.getOutputStream());
-				stdin.writeBytes("/system/bin/menu1cmdline " + _chosenBoot.getAbsolutePath() + " " + _boot + " \n");
-				// example call: 
-				// /system/bin/menu1cmdline /mnt/ext_sd/lunar/boot_config.cfg mmcblk0p22
-				
-				//Wait for the command to finish
-				process.waitFor();
+				executeCommand("/system/bin/menu1cmdline " + _chosenBoot.getAbsolutePath() + " " + _boot + " \n");
 			
 				//Check if this is a system app, if so then auto reboot phone, otherwise user has to do it manually
 				if (isLunarToolsRunningAsSystemApp() == true){
@@ -426,12 +435,8 @@ public class MainActivity extends Activity {
 			} else {
 				//Set values via init.d
 				//Call script ($1 = $file_chosen)
-				DataOutputStream stdin = new DataOutputStream(process.getOutputStream());
-				stdin.writeBytes("/system/bin/menu1initd " + _chosenBoot.getAbsolutePath() + " \n");
-				
-				//Wait for the command to finish
-				process.waitFor();
-				
+				executeCommand("/system/bin/menu1initd " + _chosenBoot.getAbsolutePath() + " \n");
+
 				//Display success message
 				showMessageWithNoActions("Success", "No error while creating Lunar init.d");
 			}
@@ -496,20 +501,10 @@ public class MainActivity extends Activity {
 	private void menu2_backupCurrentRecovery(){
 		try {			
 			Toast.makeText(_context, "starting su session", Toast.LENGTH_SHORT).show();
-		
-			//Start su session
-			Runtime rt = Runtime.getRuntime();
-
-			//Start su session
-			Process process = rt.exec(new String[]{"su", "-c", "system/bin/sh"});
 
 			//Flash recovery
 			//Call script ($1 = recovery)
-			DataOutputStream stdin = new DataOutputStream(process.getOutputStream());
-			stdin.writeBytes("/system/bin/menu2backup " + _recovery + " \n");
-			
-			//Wait for the command to finish
-			process.waitFor();
+			executeCommand("/system/bin/menu2backup " + _recovery + " \n");
 
 		} catch (Exception e){
 			//Deal with later, for now just display message
@@ -547,7 +542,6 @@ public class MainActivity extends Activity {
 		} catch (Exception e) {
 			//display message
 		}
-
 	}
 	
 	private void menu2_ShowRecoveryImages(){
@@ -594,37 +588,199 @@ public class MainActivity extends Activity {
 	}
 	
 	private void menu2_FlashChosenRecovery(){
-		//Get runtime object
-		Runtime rt = Runtime.getRuntime();
-		
 		try {
-			//Start su session
-			Process process = rt.exec(new String[]{"su", "-c", "system/bin/sh"});
-
 			//Flash recovery
 			//Call script ($1 = $file_chosen, $2 = $recovery)
-			DataOutputStream stdin = new DataOutputStream(process.getOutputStream());
-			stdin.writeBytes("/system/bin/menu2 " + _chosenRecovery.getAbsolutePath() + " " + _recovery + " \n");
-			
-			//Wait for the command to finish
-			process.waitFor();
+			executeCommand("/system/bin/menu2 " + _chosenRecovery.getAbsolutePath() + " " + _recovery + " \n");
 
 			//display success message
 			showMessageWithNoActions("Success", "No errors encountered when flashing new recovery!");
 		} catch (Exception e){
-			showMessageWithNoActions("Error", "Error when attempting to flash recovery!\n\nMessage: " + e.getMessage());
-		
+			showMessageWithNoActions("Error", "Error when attempting to flash recovery!\n\nMessage: " + e.getMessage());	
 		}
 	}
 	
 	private void menu3_UpdateKernel(){
-		Toast.makeText(_context, "updating the kernel not implemented", Toast.LENGTH_LONG).show();
+		try{
+			//Get the file listing Lunar's directory (/sdcard/lunar)
+			File[] zipFiles = _lunarDir.listFiles();
+			_zipFiles = null;		
+			_chosenZip = null;
+			//Loop through the files
+			if (zipFiles != null && zipFiles.length > 0){
+				Toast.makeText(_context, "Found " + Integer.toString(zipFiles.length) + " files in " + _lunarDir.getAbsolutePath() + "...grabbing any .zip's now", Toast.LENGTH_SHORT).show();
+				_zipFiles = new ArrayList<File>();
+				for(int i = 0; i < zipFiles.length; i++){
+					String fileName = zipFiles[i].getName();
+					//If file name is boot*.img or *.cfg, then pull it
+					if (fileName.length() > 4 && (fileName.substring(fileName.length() - 4, fileName.length()).equals(".cfg") == true)) {
+						//We found a file that ends in ".img"
+						_zipFiles.add(zipFiles[i]);
+					}
+				}
+			}
+			
+			//If we've got some .img files, ask user which one they want
+			if (_zipFiles != null && _zipFiles.size() > 0){
+				//Ask user which img to flash
+				menu3_ShowZips();
+			} else {
+				//Tell user no img files were found
+				showMessageWithNoActions("No zip to flash", "No saved zip files were found.\n\nPlease make sure your file is in\n" + _lunarDir.getAbsolutePath());
+			}
+
+		} catch (Exception e){
+			showMessageWithNoActions("Error getting .zip files...\nError: " + e.getMessage(), "Error");
+		}
+
+	}
+	
+	private void menu3_ShowZips(){
+		//Move the list from a list of File objects to an array of String objects to be displayed to the user
+		String [] fileArray = new String [_zipFiles.size()];
+		for(int i=0; i<_zipFiles.size();i++){
+			fileArray[i] = _zipFiles.get(i).getName();
+		}
+		//Create the dialog box
+		AlertDialog.Builder builder = new AlertDialog.Builder(this)		
+		.setTitle("Select zip:")
+		.setItems(fileArray, new DialogInterface.OnClickListener(){
+			@Override
+			public void onClick(DialogInterface dialog, int which){
+				dialog.dismiss();
+				//save which boot.img was chosen
+				_chosenZip = _zipFiles.get(which);
+				//Ask user how they want to set values
+				menu3_AskUserToConfirm();		
+			}
+		});
+		//Display the dialog to the user
+		AlertDialog alert = builder.create();
+		alert.show();
+	}
+	
+	private void menu3_AskUserToConfirm(){
+		new AlertDialog.Builder(this)
+	    .setTitle("Flash Now?")
+	    .setMessage("Flash [" + _chosenZip.getName() + "] now?\n\nIf you choose to flash now, there's no going back!")
+	    .setPositiveButton("Flash Now", new DialogInterface.OnClickListener() {
+	        public void onClick(DialogInterface dialog, int which) { 
+	            //User wants to flash now
+	        	menu3_FlashKernelUpdate();
+	        }
+	     })
+	     .setNegativeButton("Cancel", new DialogInterface.OnClickListener(){
+	    	public void onClick(DialogInterface dialog, int which){
+	    		//User wants to save for later - nothing to do???
+	    	}
+	     })
+	     .show();		
+	}
+	
+	private void menu3_FlashKernelUpdate(){
+		try {
+			//Flash kernel update from zip
+			//Call script ($1 = $file_chosen, $2 = $boot)
+			executeCommand("/system/bin/menu3 " + _chosenZip.getAbsolutePath() + " " + _boot + " \n");
+
+			//display success message
+			showMessageWithNoActions("Success", "No errors encountered!");
+		} catch (Exception e){
+			showMessageWithNoActions("Error", "Flash Kernel Update from Zip failed!\n\nMessage: " + e.getMessage());	
+		}
+
 	}
 
 	private void menu4_FlashBootFromZipAutoReboot(){
-		Toast.makeText(_context, "flashing boot from zip not implemented", Toast.LENGTH_LONG).show();
+		try{
+			//Get the file listing Lunar's directory (/sdcard/lunar)
+			File[] zipFiles = _lunarDir.listFiles();
+			_zipFiles = null;		
+			_chosenZip = null;
+			//Loop through the files
+			if (zipFiles != null && zipFiles.length > 0){
+				Toast.makeText(_context, "Found " + Integer.toString(zipFiles.length) + " files in " + _lunarDir.getAbsolutePath() + "...grabbing any .zip's now", Toast.LENGTH_SHORT).show();
+				_zipFiles = new ArrayList<File>();	
+				for(int i = 0; i < zipFiles.length; i++){
+					String fileName = zipFiles[i].getName();
+					//If file name is boot*.img or *.cfg, then pull it
+					if (fileName.length() > 4 && (fileName.substring(fileName.length() - 4, fileName.length()).equals(".cfg") == true)) {
+						//We found a file that ends in ".img"
+						_zipFiles.add(zipFiles[i]);
+					}
+				}
+			}
+			
+			//If we've got some .img files, ask user which one they want
+			if (_zipFiles != null && _zipFiles.size() > 0){
+				//Ask user which img to flash
+				menu4_ShowZips();
+			} else {
+				//Tell user no img files were found
+				showMessageWithNoActions("No zip to flash", "No saved zip files were found.\n\nPlease make sure your file is in\n" + _lunarDir.getAbsolutePath());
+			}
+
+		} catch (Exception e){
+			showMessageWithNoActions("Error getting .zip files...\nError: " + e.getMessage(), "Error");
+		}
+
+	}
+	
+	private void menu4_ShowZips(){
+		//Move the list from a list of File objects to an array of String objects to be displayed to the user
+		String [] fileArray = new String [_zipFiles.size()];
+		for(int i=0; i<_zipFiles.size();i++){
+			fileArray[i] = _zipFiles.get(i).getName();
+		}
+		//Create the dialog box
+		AlertDialog.Builder builder = new AlertDialog.Builder(this)		
+		.setTitle("Select zip:")
+		.setItems(fileArray, new DialogInterface.OnClickListener(){
+			@Override
+			public void onClick(DialogInterface dialog, int which){
+				dialog.dismiss();
+				//save which boot.img was chosen
+				_chosenZip = _zipFiles.get(which);
+				//Ask user if they want to flash now
+				menu4_AskUserToConfirm();		
+			}
+		});
+		//Display the dialog to the user
+		AlertDialog alert = builder.create();
+		alert.show();
+	}
+	
+	private void menu4_AskUserToConfirm(){
+		new AlertDialog.Builder(this)
+	    .setTitle("Flash Now?")
+	    .setMessage("Flash [" + _chosenZip.getName() + "] now?\n\nIf you choose to flash now, there's no going back!")
+	    .setPositiveButton("Flash Now", new DialogInterface.OnClickListener() {
+	        public void onClick(DialogInterface dialog, int which) { 
+	            //User wants to flash now
+	        	menu4_FlashBootImgFromZip();
+	        }
+	     })
+	     .setNegativeButton("Cancel", new DialogInterface.OnClickListener(){
+	    	public void onClick(DialogInterface dialog, int which){
+	    		//User wants to save for later - nothing to do???
+	    	}
+	     })
+	     .show();		
 	}
 
+	private void menu4_FlashBootImgFromZip(){
+		try {
+			//Flash kernel update from zip
+			//Call script ($1 = $file_chosen, $2 = $boot)
+			executeCommand("/system/bin/menu4 " + _chosenZip.getAbsolutePath() + " " + _boot + " \n");
+
+			//display success message
+			showMessageWithNoActions("Success", "No errors encountered!");
+		} catch (Exception e){
+			showMessageWithNoActions("Error", "Flash boot image from Zip failed!\n\nMessage: " + e.getMessage());	
+		}
+	}
+	
 	private void showMessageWithNoActions(String dlgTitle, String dlgMessage){
 		//Simply tells user a message, with no further action to be taken
 		new AlertDialog.Builder(this)
@@ -663,38 +819,28 @@ public class MainActivity extends Activity {
 		return lunarIsSystemApp;
 	}
 
-	private boolean copyFile(File orig, File dest){
-		try {
-			FileInputStream in = new FileInputStream(orig.getAbsolutePath());
-			FileOutputStream out = new FileOutputStream(dest.getAbsolutePath());
-			byte[] buffer = new byte[1024];
-			int length;
-			while((length = in.read(buffer)) > 0){
-				out.write(buffer, 0, length);
-			}
-			in.close();
-			out.close();
+	private boolean executeCommand(String command){
+		//Get runtime object
+		Runtime rt = Runtime.getRuntime();
+		Process process = null;
+		OutputStreamWriter osw = null;
+		
+		try {			
+			//Start su session
+			process = rt.exec("su");
+			osw = new OutputStreamWriter(process.getOutputStream());
+			osw.write(command);
+			osw.flush();
+			osw.close();
+
+			//wait for the command to finish
+			process.waitFor();
+			
+			//No exception thrown, so return true
 			return true;
 		} catch (Exception e){
-			showMessageWithNoActions("File Copy Error", "Error while trying to copy " + orig.getName() + " to " + dest.getName() + "!\n\nMessage: " + e.getMessage());
+			showMessageWithNoActions("IOException thrown when calling script: \n" + command + "\n\nError: " + e.getMessage(), "Error");		
 			return false;
 		}
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
