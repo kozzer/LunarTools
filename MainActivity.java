@@ -277,14 +277,12 @@ public class MainActivity extends Activity {
 			File[] bootFiles = _lunarDir.listFiles();
 			//Loop through the files
 			if (bootFiles != null && bootFiles.length > 0){
-				Toast.makeText(_context, "Found " + Integer.toString(bootFiles.length) + " files in " + _lunarDir.getAbsolutePath() + "...grabbing any .img's/.cfg's now", Toast.LENGTH_SHORT).show();
+				Toast.makeText(_context, "Found " + Integer.toString(bootFiles.length) + " files in " + _lunarDir.getAbsolutePath() + "...grabbing any .cfg's now", Toast.LENGTH_SHORT).show();
 				_bootImgs = new ArrayList<File>();
 				for(int i = 0; i < bootFiles.length; i++){
 					String fileName = bootFiles[i].getName();
 					//If file name is boot*.img or *.cfg, then pull it
-					if (fileName.length() > 4 && 
-							((fileName.substring(0, 4).equals("boot") == true && fileName.substring(fileName.length() - 4, fileName.length()).equals(".img") == true) ||
-							(fileName.substring(fileName.length() - 4, fileName.length()).equals(".cfg") == true))) {
+					if (fileName.length() > 4 && (fileName.substring(fileName.length() - 4, fileName.length()).equals(".cfg") == true)) {
 						//We found a file that ends in ".img"
 						_bootImgs.add(bootFiles[i]);
 					}
@@ -410,9 +408,12 @@ public class MainActivity extends Activity {
 				
 				//Call script ($1 = $file_chosen, $2 = $boot)
 				DataOutputStream stdin = new DataOutputStream(process.getOutputStream());
-				stdin.writeBytes("/bin/menu1cmdline " + _chosenBoot.getAbsolutePath() + " " + _boot + "\n");
+				stdin.writeBytes("/system/bin/menu1cmdline " + _chosenBoot.getAbsolutePath() + " " + _boot + " \n");
 				// example call: 
-				// /bin/menu1cmdline /mnt/ext_sd/lunar/boot_config.cfg mmcblk0p22
+				// /system/bin/menu1cmdline /mnt/ext_sd/lunar/boot_config.cfg mmcblk0p22
+				
+				//Wait for the command to finish
+				process.waitFor();
 			
 				//Check if this is a system app, if so then auto reboot phone, otherwise user has to do it manually
 				if (isLunarToolsRunningAsSystemApp() == true){
@@ -424,54 +425,12 @@ public class MainActivity extends Activity {
 				}
 			} else {
 				//Set values via init.d
+				//Call script ($1 = $file_chosen)
+				DataOutputStream stdin = new DataOutputStream(process.getOutputStream());
+				stdin.writeBytes("/system/bin/menu1initd " + _chosenBoot.getAbsolutePath() + " \n");
 				
-				//Get current governor, max freq, min freq, i/o scheduler, sweep 2 wake settings
-				process = rt.exec("grep -i \"gov=\"" + _chosenBoot + " | sed \"s/ /\n/g\" | sed \"s/gov=//g\" | head -n1 | tail -n1");
-				BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-				String gov = reader.readLine();
-				process = rt.exec("grep -i \"maxkhz=\" " + _chosenBoot + " | sed \"s/ /\n/g\" | sed \"s/maxkhz=//g\" | head -n2 | tail -n1");
-				String maxFreq = reader.readLine();
-				process = rt.exec("grep -i \"minkhz=\" " + _chosenBoot + " | sed \"s/ /\n/g\" | sed \"s/minkhz=//g\" | head -n3 | tail -n1");
-				String minFreq = reader.readLine();
-				process = rt.exec("grep -i \"scheduler=\" " + _chosenBoot + " | sed \"s/ /\n/g\" | sed \"s/scheduler=//g\" | head -n4 | tail -n1");	
-				String ioScheduler = reader.readLine();
-				process = rt.exec("grep -i \"s2w=\" " + _chosenBoot + " | sed \"s/ /\n/g\" | sed \"s/s2w=//g\" | tail -n1");
-				String s2Wake = reader.readLine();
-				
-				//Send those values to init.d
-				process = rt.exec("echo '#!/system/bin/sh' > /system/etc/init.d/99lunar");
-				process = rt.exec("echo 'echo ''\"'" + ioScheduler + "'\"' '> /sys/block/mmcblk0/queue/scheduler' >> /system/etc/init.d/99lunar");
-				process = rt.exec("echo 'echo \"'" + gov + "'\" > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor' >> /system/etc/init.d/99lunar");
-				process = rt.exec("echo 'echo \"'" + minFreq + "'\" > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq' >> /system/etc/init.d/99lunar");
-				process = rt.exec("echo 'echo \"'" + maxFreq + "'\" > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq' >> /system/etc/init.d/99lunar");
-				
-				//Get directory objects for 3 cpu's
-				File cpu1 = new File("/sys/devices/system/cpu/cpu1/");
-				File cpu2 = new File("/sys/devices/system/cpu/cpu2/");
-				File cpu3 = new File("/sys/devices/system/cpu/cpu3/");
-				//Write out cpu settings (if cpu exists) to lunar init.d
-				if (cpu1.exists() && cpu1.isDirectory()){
-					process = rt.exec("echo 'echo \"'" + gov + "'\" > /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor' >> /system/etc/init.d/99lunar");
-					process = rt.exec("echo 'echo \"'" + minFreq + "'\" > /sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq' >> /system/etc/init.d/99lunar");
-					process = rt.exec("echo 'echo \"'" + maxFreq + "'\" > /sys/devices/system/cpu/cpu1/cpufreq/scaling_max_freq' >> /system/etc/init.d/99lunar");
-				}
-				if (cpu2.exists() && cpu2.isDirectory()){
-					process = rt.exec("echo 'echo \"'" + gov + "'\" > /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor' >> /system/etc/init.d/99lunar");
-					process = rt.exec("echo 'echo \"'" + minFreq + "'\" > /sys/devices/system/cpu/cpu2/cpufreq/scaling_min_freq' >> /system/etc/init.d/99lunar");
-					process = rt.exec("echo 'echo \"'" + maxFreq + "'\" > /sys/devices/system/cpu/cpu2/cpufreq/scaling_max_freq' >> /system/etc/init.d/99lunar");
-				}
-				if (cpu3.exists() && cpu3.isDirectory()){
-					process = rt.exec("echo 'echo \"'" + gov + "'\" > /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor' >> /system/etc/init.d/99lunar");
-					process = rt.exec("echo 'echo \"'" + minFreq + "'\" > /sys/devices/system/cpu/cpu2/cpufreq/scaling_min_freq' >> /system/etc/init.d/99lunar");
-					process = rt.exec("echo 'echo \"'" + maxFreq + "'\" > /sys/devices/system/cpu/cpu2/cpufreq/scaling_max_freq' >> /system/etc/init.d/99lunar");
-				}
-				//Move sweep 2 wake setting if it exists
-				File sweep2wake = new File("/sys/android_touch/sweep2wake");
-				if (sweep2wake.exists() && sweep2wake.isFile()){
-					process = rt.exec("echo 'echo '$s2w' > /sys/android_touch/sweep2wake' >> /system/etc/init.d/99lunar");
-				}
-				//Set permissions for lunar init.d 
-				process = rt.exec("chmod 755 /system/etc/init.d/99lunar");
+				//Wait for the command to finish
+				process.waitFor();
 				
 				//Display success message
 				showMessageWithNoActions("Success", "No error while creating Lunar init.d");
@@ -540,59 +499,18 @@ public class MainActivity extends Activity {
 		
 			//Start su session
 			Runtime rt = Runtime.getRuntime();
-			Process process = rt.exec("su");
+
+			//Start su session
+			Process process = rt.exec(new String[]{"su", "-c", "system/bin/sh"});
+
+			//Flash recovery
+			//Call script ($1 = recovery)
+			DataOutputStream stdin = new DataOutputStream(process.getOutputStream());
+			stdin.writeBytes("/system/bin/menu2backup " + _recovery + " \n");
 			
-			//CD to lunar dir
-			process = rt.exec("cd " + _lunarDir.getAbsolutePath());
-			Toast.makeText(_context, "After the cd...", Toast.LENGTH_SHORT).show();
-			
-			//Make temp recovery backup directory under lunar tools 	
-			String recoveryPath = _lunarDir.getAbsolutePath() + "/recoverytemp";
-			process = rt.exec("mkdir " + recoveryPath);
-			//Test that path exists
-			File recoveryDir = new File(recoveryPath);
-			if (!recoveryDir.exists() || !recoveryDir.isDirectory()){
-				//display error message and abort process
-				showMessageWithNoActions("Dir Create Fail", "Failed to create " + recoveryPath + "!\n\nCanceling process.");
-			} else {
-				
-				//Backup recovery img
-				process = rt.exec("dd if=" + _blockPath + _recovery + " of=" + recoveryPath + "/recoverytemp.img 2>> lunardebug.log");
-				process = rt.exec("cd " + recoveryPath);
-				process = rt.exec("abootimg -x recoverytemp.img");
-				
-				//Get the recovery file size
-				process = rt.exec("stat -c %s zImage");
-				BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-				String strRecoverySize1 = reader.readLine();
-				int recoverySize1 = Integer.parseInt(strRecoverySize1);
-				process = rt.exec("stat -c %s initrd.img");
-				String strRecoverySize2 = reader.readLine();
-				int recoverySize2 = Integer.parseInt(strRecoverySize2);
-				int recoverySize = recoverySize1 + recoverySize2 + 6120;
-				
-				//What is this line doing?  Why printf? Does line below accomplish same thing?
-				//process = rt.exec("printf -v recoveryhexsize \"%x\" \"" + Integer.toString(recoverySize) + "\"");				
-				String recoveryHexSize = Integer.toHexString(recoverySize);
-				
-				process = rt.exec("sed -i \"s/bootsize.*/bootsize = 0x" + recoveryHexSize + "/g\" bootimg.cfg");
-				process = rt.exec("abootimg -u recoverytemp.img -f bootimg.cfg");
-				
-				//Get/create the back up's destination path & directory
-				String dateString = String.format("%1$tY%1$tm%1$te", new Date());	//should return current date of yyyyMMdd
-				String backupPath = _lunarDir.getAbsolutePath() + "/recovery_" + dateString;
-				process = rt.exec("cd ..");
-				File backupDir = new File(backupPath);
-				if (!backupDir.exists()){
-					process = rt.exec("mkdir " + backupPath);
-				}
-				//Move the recovery image and delete the temp
-				process = rt.exec("mv " + recoveryPath + "/recoverytemp.img " + backupPath + "/recovery.img");
-				process = rt.exec("rm -r " + recoveryPath);
-	
-				//Show user success message, then move on to flashing new recovery
-				Toast.makeText(_context, "Your current recovery was saved to " + backupPath + " dir as recovery.img", Toast.LENGTH_SHORT);
-			}
+			//Wait for the command to finish
+			process.waitFor();
+
 		} catch (Exception e){
 			//Deal with later, for now just display message
 			showMessageWithNoActions("Error", "There was an error while attempting to back up your recovery!\n\nMessage: " + e.getMessage());
@@ -681,10 +599,16 @@ public class MainActivity extends Activity {
 		
 		try {
 			//Start su session
-			//Process process = rt.exec("su");
+			Process process = rt.exec(new String[]{"su", "-c", "system/bin/sh"});
+
 			//Flash recovery
-			//process = rt.exec("dd if=" + _chosenRecovery.getAbsolutePath() + " of=" + _blockPath + _recovery + " 2>> lunardebug.log");
-			copyFile(_chosenRecovery, new File(_blockPath + _recovery));
+			//Call script ($1 = $file_chosen, $2 = $recovery)
+			DataOutputStream stdin = new DataOutputStream(process.getOutputStream());
+			stdin.writeBytes("/system/bin/menu2 " + _chosenRecovery.getAbsolutePath() + " " + _recovery + " \n");
+			
+			//Wait for the command to finish
+			process.waitFor();
+
 			//display success message
 			showMessageWithNoActions("Success", "No errors encountered when flashing new recovery!");
 		} catch (Exception e){
