@@ -1,6 +1,7 @@
 package com.webkozzer.lunartools;
 
 import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -401,43 +402,18 @@ public class MainActivity extends Activity {
 			Toast.makeText(_context, "starting su session", Toast.LENGTH_SHORT).show();
 			
 			//Start su session
-			Process process = rt.exec("su");
+			Process process = rt.exec(new String[]{"su", "-c", "system/bin/sh"});
 
 			if (_setValuesViaCommandLine == true){
-				//Set values via command line
-				if (_chosenBoot.getName().substring(_chosenBoot.getName().length() - 4, _chosenBoot.getName().length()).equals(".cfg") == true){
 					
-					Toast.makeText(_context, "flashing from cfg file", Toast.LENGTH_SHORT).show();
-					
-					//config file
-					process = rt.exec("cd " + _lunarDir.getAbsolutePath());
-					process = rt.exec("dd if=" + _blockPath + _boot + " of=" + _lunarDir.getAbsolutePath() + "/tempboot.img 2>> lunardebug.log");
-					process = rt.exec("abootimg -x " + _lunarDir.getAbsolutePath() + "/tempboot.img >> lunardebug.log");
-					process = rt.exec("sed -i -e \"s/gov.*//g\" bootimg.cfg");
-					process = rt.exec("file_chosen=$(cat " + _chosenBoot + ")");
-					process = rt.exec("sed -i -e \"$ s/$/" + _chosenBoot + "/g\" bootimg.cfg");
-					process = rt.exec("cat bootimg.cfg >> lunardebug.log");
-					process = rt.exec("abootimg -u tempboot.img -f bootimg.cfg >> lunardebug.log");
-					process = rt.exec("dd if=" + _lunarDir.getAbsolutePath() + "/tempboot.img of=" + _blockPath + _boot + " 2>> lunardebug.log");
-					
-					Toast.makeText(_context, "removing old files", Toast.LENGTH_SHORT).show();
-					
-					process = rt.exec("rm bootimg.cfg");
-					process = rt.exec("rm initrd.img");
-					process = rt.exec("rm zImage");
-					process = rt.exec("rm tempboot.img");
-				} else if (_chosenBoot.getName().substring(_chosenBoot.getName().length() - 4, _chosenBoot.getName().length()).equals(".img") == true){
-					
-					Toast.makeText(_context, "flashing " + _chosenBoot.getName(), Toast.LENGTH_SHORT).show();
-					
-					//Actual boot.img file, move to the boot block
-					//process = rt.exec("dd if=" + _chosenBoot.getName() + " of=" + _blockPath + _boot);
-					copyFile(_chosenBoot, new File(_blockPath + _boot));								
-				}
-				//Delete dalvik data
-				Toast.makeText(_context, "clearing dalvik-cache", Toast.LENGTH_SHORT).show();
-				process = rt.exec("rm -r /data/dalvik-cache");
+				Toast.makeText(_context, "flashing file", Toast.LENGTH_SHORT).show();
 				
+				//Call script ($1 = $file_chosen, $2 = $boot)
+				DataOutputStream stdin = new DataOutputStream(process.getOutputStream());
+				stdin.writeBytes("/bin/menu1cmdline " + _chosenBoot.getAbsolutePath() + " " + _boot + "\n");
+				// example call: 
+				// /bin/menu1cmdline /mnt/ext_sd/lunar/boot_config.cfg mmcblk0p22
+			
 				//Check if this is a system app, if so then auto reboot phone, otherwise user has to do it manually
 				if (isLunarToolsRunningAsSystemApp() == true){
 					//Tell user they're rebooting to recovery
@@ -781,3 +757,20 @@ public class MainActivity extends Activity {
 		}
 	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
