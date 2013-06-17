@@ -31,25 +31,31 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
+	//Holds hard-coded paths to system objects that are the same across HTC/Android devices
 	private final String _fstabPath = "/system/etc/vold.fstab";
 	private final String _buildpropPath = "/system/build.prop";
 	private final String _blockPath = "/dev/block/";
 	
+	//Holds a pointer to the app's main thread context, for use by pop-ups and toast messages
 	private Context _context;
-	
+	//Values for rom info, boot/recovery block value, path to external sdcard, and File object for the lunar direcotory
 	private String _currentrom;
 	private String _boot;
 	private String _recovery;
 	private String _extsd;
 	private File _lunarDir;
 	
+	//Menu #1 - list of boot img files, place to put info about which boot the user chose, and how they want to apply values (cmd line vs init.d)
 	private List<File> _bootImgs;
 	private File _chosenBoot;
 	private boolean _setValuesViaCommandLine;
-	
+	//Menu #2 - list of recovery img files and user-chosen file
 	private List<File> _recoveryImgs;
 	private File _chosenRecovery;
-	
+	//Menu #3 - list of kernel zip files, and user-chosen file
+	private List<File> _kernelFiles;
+	private File _chosenKernel;
+	//Menu #4 - list of boot zip files, and user-chosen file
 	private List<File> _zipFiles;
 	private File _chosenZip;
 
@@ -412,15 +418,10 @@ public class MainActivity extends Activity {
 			//Get runtime object
 			Runtime rt = Runtime.getRuntime();
 			
-			Toast.makeText(_context, "starting su session", Toast.LENGTH_SHORT).show();
-			
 			//Start su session
-			Process process = rt.exec(new String[]{"su", "-c", "system/bin/sh"});
+			//Process process = rt.exec(new String[]{"su", "-c", "system/bin/sh"});  -- DON'T NEED ANY MORE WITH executeCommand()
 
 			if (_setValuesViaCommandLine == true){
-					
-				Toast.makeText(_context, "flashing file", Toast.LENGTH_SHORT).show();
-				
 				//Call script ($1 = $file_chosen, $2 = $boot)
 				executeCommand("/system/bin/menu1cmdline " + _chosenBoot.getAbsolutePath() + " " + _boot + " \n");
 			
@@ -500,8 +501,6 @@ public class MainActivity extends Activity {
 	
 	private void menu2_backupCurrentRecovery(){
 		try {			
-			Toast.makeText(_context, "starting su session", Toast.LENGTH_SHORT).show();
-
 			//Flash recovery
 			//Call script ($1 = recovery)
 			executeCommand("/system/bin/menu2backup " + _recovery + " \n");
@@ -603,27 +602,27 @@ public class MainActivity extends Activity {
 	private void menu3_UpdateKernel(){
 		try{
 			//Get the file listing Lunar's directory (/sdcard/lunar)
-			File[] zipFiles = _lunarDir.listFiles();
-			_zipFiles = null;		
-			_chosenZip = null;
+			File[] kernelFiles = _lunarDir.listFiles();
+			_kernelFiles = null;		
+			_chosenKernel = null;
 			//Loop through the files
-			if (zipFiles != null && zipFiles.length > 0){
-				Toast.makeText(_context, "Found " + Integer.toString(zipFiles.length) + " files in " + _lunarDir.getAbsolutePath() + "...grabbing any .zip's now", Toast.LENGTH_SHORT).show();
-				_zipFiles = new ArrayList<File>();
-				for(int i = 0; i < zipFiles.length; i++){
-					String fileName = zipFiles[i].getName();
-					//If file name is boot*.img or *.cfg, then pull it
-					if (fileName.length() > 4 && (fileName.substring(fileName.length() - 4, fileName.length()).equals(".cfg") == true)) {
-						//We found a file that ends in ".img"
-						_zipFiles.add(zipFiles[i]);
+			if (kernelFiles != null && kernelFiles.length > 0){
+				Toast.makeText(_context, "Found " + Integer.toString(kernelFiles.length) + " files in " + _lunarDir.getAbsolutePath() + "...grabbing any .zip's now", Toast.LENGTH_SHORT).show();
+				_kernelFiles = new ArrayList<File>();
+				for(int i = 0; i < kernelFiles.length; i++){
+					String fileName = kernelFiles[i].getName();
+					//If file name is *.zip, then pull it
+					if (fileName.length() > 4 && (fileName.substring(fileName.length() - 4, fileName.length()).equals(".zip") == true)) {
+						//We found a file that ends in ".zip"
+						_kernelFiles.add(kernelFiles[i]);
 					}
 				}
 			}
 			
-			//If we've got some .img files, ask user which one they want
-			if (_zipFiles != null && _zipFiles.size() > 0){
-				//Ask user which img to flash
-				menu3_ShowZips();
+			//If we've got some .zip files, ask user which one they want
+			if (_kernelFiles != null && _kernelFiles.size() > 0){
+				//Ask user which zip to flash
+				menu3_ShowKernels();
 			} else {
 				//Tell user no img files were found
 				showMessageWithNoActions("No zip to flash", "No saved zip files were found.\n\nPlease make sure your file is in\n" + _lunarDir.getAbsolutePath());
@@ -635,11 +634,11 @@ public class MainActivity extends Activity {
 
 	}
 	
-	private void menu3_ShowZips(){
+	private void menu3_ShowKernels(){
 		//Move the list from a list of File objects to an array of String objects to be displayed to the user
-		String [] fileArray = new String [_zipFiles.size()];
-		for(int i=0; i<_zipFiles.size();i++){
-			fileArray[i] = _zipFiles.get(i).getName();
+		String [] fileArray = new String [_kernelFiles.size()];
+		for(int i=0; i<_kernelFiles.size();i++){
+			fileArray[i] = _kernelFiles.get(i).getName();
 		}
 		//Create the dialog box
 		AlertDialog.Builder builder = new AlertDialog.Builder(this)		
@@ -649,7 +648,7 @@ public class MainActivity extends Activity {
 			public void onClick(DialogInterface dialog, int which){
 				dialog.dismiss();
 				//save which boot.img was chosen
-				_chosenZip = _zipFiles.get(which);
+				_chosenKernel = _kernelFiles.get(which);
 				//Ask user how they want to set values
 				menu3_AskUserToConfirm();		
 			}
@@ -662,7 +661,7 @@ public class MainActivity extends Activity {
 	private void menu3_AskUserToConfirm(){
 		new AlertDialog.Builder(this)
 	    .setTitle("Flash Now?")
-	    .setMessage("Flash [" + _chosenZip.getName() + "] now?\n\nIf you choose to flash now, there's no going back!")
+	    .setMessage("Flash [" + _chosenKernel.getAbsolutePath() + "] now?\n\nIf you choose to flash now, there's no going back!")
 	    .setPositiveButton("Flash Now", new DialogInterface.OnClickListener() {
 	        public void onClick(DialogInterface dialog, int which) { 
 	            //User wants to flash now
@@ -681,7 +680,7 @@ public class MainActivity extends Activity {
 		try {
 			//Flash kernel update from zip
 			//Call script ($1 = $file_chosen, $2 = $boot)
-			executeCommand("/system/bin/menu3 " + _chosenZip.getAbsolutePath() + " " + _boot + " \n");
+			executeCommand("/system/bin/menu3 " + _chosenKernel.getAbsolutePath() + " " + _boot + " \n");
 
 			//display success message
 			showMessageWithNoActions("Success", "No errors encountered!");
@@ -703,9 +702,9 @@ public class MainActivity extends Activity {
 				_zipFiles = new ArrayList<File>();	
 				for(int i = 0; i < zipFiles.length; i++){
 					String fileName = zipFiles[i].getName();
-					//If file name is boot*.img or *.cfg, then pull it
-					if (fileName.length() > 4 && (fileName.substring(fileName.length() - 4, fileName.length()).equals(".cfg") == true)) {
-						//We found a file that ends in ".img"
+					//If file name is *.zip, then pull it
+					if (fileName.length() > 4 && (fileName.substring(fileName.length() - 4, fileName.length()).equals(".zip") == true)) {
+						//We found a file that ends in ".zip"
 						_zipFiles.add(zipFiles[i]);
 					}
 				}
@@ -753,7 +752,7 @@ public class MainActivity extends Activity {
 	private void menu4_AskUserToConfirm(){
 		new AlertDialog.Builder(this)
 	    .setTitle("Flash Now?")
-	    .setMessage("Flash [" + _chosenZip.getName() + "] now?\n\nIf you choose to flash now, there's no going back!")
+	    .setMessage("Flash [" + _chosenZip.getAbsolutePath() + "] now?\n\nIf you choose to flash now, there's no going back!")
 	    .setPositiveButton("Flash Now", new DialogInterface.OnClickListener() {
 	        public void onClick(DialogInterface dialog, int which) { 
 	            //User wants to flash now
@@ -826,10 +825,13 @@ public class MainActivity extends Activity {
 		OutputStreamWriter osw = null;
 		
 		try {			
+			
 			//Start su session
 			process = rt.exec("su");
 			osw = new OutputStreamWriter(process.getOutputStream());
+			
 			osw.write(command);
+			
 			osw.flush();
 			osw.close();
 
@@ -844,3 +846,20 @@ public class MainActivity extends Activity {
 		}
 	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
